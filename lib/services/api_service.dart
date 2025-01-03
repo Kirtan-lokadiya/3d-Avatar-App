@@ -153,7 +153,7 @@ class ApiService {
   }
 
 static Future<String?> createAvatarWithImage(String userId, String base64Image, String gender) async {
-  final url = Uri.parse("https://models.readyplayer.me/v2/avatars");
+  final url = Uri.parse("https://api.readyplayer.me/v2/avatars");
   final body = jsonEncode({
     "data": {
       "userId": userId,

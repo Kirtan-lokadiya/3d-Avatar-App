@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -19,7 +18,8 @@ class UploadConvertScreen extends StatefulWidget {
 class _UploadConvertScreenState extends State<UploadConvertScreen> {
   bool _isLoading = false;
   List<Map<String, dynamic>>? _templates;
-  File? _imageFile;
+  XFile? _imageFile;
+
 
   final ImagePicker _picker = ImagePicker();
 
@@ -120,11 +120,12 @@ class _UploadConvertScreenState extends State<UploadConvertScreen> {
     );
   }
 
-  Future<String?> _getBase64Image() async {
-    if (_imageFile == null) return null;
-    final bytes = await _imageFile!.readAsBytes();
-    return base64Encode(bytes);
-  }
+Future<String?> _getBase64Image() async {
+  if (_imageFile == null) return null;
+  final bytes = await _imageFile!.readAsBytes();
+  return base64Encode(bytes);
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -180,58 +181,81 @@ class _UploadConvertScreenState extends State<UploadConvertScreen> {
       },
     );
   }
-
 Widget _buildUploadSection() {
   return Center(
-    child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _imageFile == null
-            ? const Text('No image selected.')
-            : kIsWeb
-                ? Image.network(_imageFile!.path) // Display the image as a network image for the web
-                : Image.file(_imageFile!),       // Display the image as a file on mobile
-        ElevatedButton(
-          onPressed: () async {
-            final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-            if (pickedFile != null) {
-              setState(() {
-                _imageFile = File(pickedFile.path);
-              });
-            }
-          },
-          child: const Text('Select Image'),
-        ),
-        ElevatedButton(
-          onPressed: () async {
-            final gender = await _selectGender(context);
-            if (gender != null) {
-              final base64Image = await _getBase64Image(); // Convert selected image to base64
-              if (base64Image != null) {
-                final userId = await ApiService.getFromCache('userId');
-                if (userId != null) {
-                  final avatarId = await ApiService.createAvatarWithImage(userId, base64Image, gender);
-                  if (avatarId != null) {
-                    final saved = await ApiService.saveAvatar(avatarId);
-                    if (saved) {
-                      final filePathOrUrl = await ApiService.downloadAvatarGlb(avatarId);
-                      if (filePathOrUrl != null) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AvatarDisplayScreen(avatarGlbUrl: filePathOrUrl),
-                          ),
-                        );
+    child: SingleChildScrollView( // Wrap in SingleChildScrollView
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          _imageFile == null
+              ? const Text('No image selected.')
+              : kIsWeb
+                  ? Image.network(_imageFile!.path, height: 200) // Limit image height
+                  : FutureBuilder<Uint8List>(
+                      future: _imageFile!.readAsBytes(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+                          return Image.memory(snapshot.data!, height: 200); // Limit image height
+                        } else if (snapshot.hasError) {
+                          return const Text('Error loading image');
+                        } else {
+                          return const CircularProgressIndicator();
+                        }
+                      },
+                    ),
+          ElevatedButton(
+            onPressed: () async {
+              print('Select Image button pressed');
+              final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
+              if (pickedFile != null) {
+                setState(() {
+                  _imageFile = pickedFile;
+                });
+                print('Image selected: ${pickedFile.path}');
+              } else {
+                print('No image selected');
+              }
+            },
+            child: const Text('Select Image'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              print('Upload and Generate Avatar button pressed');
+              final gender = await _selectGender(context);
+              print('Gender selected: $gender');
+              if (gender != null) {
+                final base64Image = await _getBase64Image();
+                print('Image converted to base64');
+                if (base64Image != null) {
+                  final userId = await ApiService.getFromCache('userId');
+                  print('User ID fetched: $userId');
+                  if (userId != null) {
+                    final avatarId = await ApiService.createAvatarWithImage(userId, base64Image, gender);
+                    print('Avatar created with ID: $avatarId');
+                    if (avatarId != null) {
+                      final saved = await ApiService.saveAvatar(avatarId);
+                      print('Avatar saved: $saved');
+                      if (saved) {
+                        final filePathOrUrl = await ApiService.downloadAvatarGlb(avatarId);
+                        print('Avatar GLB downloaded: $filePathOrUrl');
+                        if (filePathOrUrl != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => AvatarDisplayScreen(avatarGlbUrl: filePathOrUrl),
+                            ),
+                          );
+                        }
                       }
                     }
                   }
                 }
               }
-            }
-          },
-          child: const Text('Upload and Generate Avatar'),
-        ),
-      ],
+            },
+            child: const Text('Upload and Generate Avatar'),
+          ),
+        ],
+      ),
     ),
   );
 }
