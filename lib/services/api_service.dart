@@ -129,7 +129,7 @@ class ApiService {
   }
 
   // Download avatar GLB file
-  static Future<String?> downloadAvatarGlb(String avatarId) async {
+  static Future<String?> downloadAvatarGlbFile(String avatarId) async {
     final url = Uri.parse("https://api.readyplayer.me/v2/avatars/$avatarId.glb");
     print("Downloading avatar from URL: $url");
 
@@ -152,32 +152,108 @@ class ApiService {
     }
   }
 
-static Future<String?> createAvatarWithImage(String userId, String base64Image, String gender) async {
-  final url = Uri.parse("https://api.readyplayer.me/v2/avatars");
-  final body = jsonEncode({
-    "data": {
-      "userId": userId,
-      "partner": "3d-avatar-7jesrz",
-      "bodyType": "fullbody",
-      "gender": gender,
-      "assets": {"outfit": ""},
-      "base64Image": base64Image,
+  static Future<String?> createAvatarWithImage(String userId, String base64Image, String gender) async {
+    final url = Uri.parse("https://api.readyplayer.me/v2/avatars");
+    final body = jsonEncode({
+      "data": {
+        "userId": userId,
+        "partner": "3d-avatar-7jesrz",
+        "bodyType": "fullbody",
+        "gender": gender,
+        "assets": {"outfit": ""},
+        "base64Image": base64Image,
+      }
+    });
+
+    final response = await http.post(
+      url,
+      headers: {"x-api-key": apiKey, "Content-Type": "application/json"},
+      body: body,
+    );
+
+    if (response.statusCode == 201) {
+      final data = jsonDecode(response.body);
+      return data['data']['id'];
+    } else {
+      print("Error creating avatar: ${response.statusCode} - ${response.body}");
+      return null;
     }
-  });
-
-  final response = await http.post(
-    url,
-    headers: {"x-api-key": apiKey, "Content-Type": "application/json"},
-    body: body,
-  );
-
-  if (response.statusCode == 201) {
-    final data = jsonDecode(response.body);
-    return data['data']['id'];
-  } else {
-    print("Error creating avatar: ${response.statusCode} - ${response.body}");
-    return null;
   }
-}
 
+  static Future<List<Map<String, dynamic>>?> fetchAssets(String userId) async {
+    final url = Uri.parse("$baseUrl/v1/assets?filter=usable-by-user-and-app&filterApplicationId=$applicationId&filterUserId=$userId");
+    print("Fetching assets from URL: $url");
+
+    final response = await http.get(
+      url,
+      headers: {
+        "Accept": "*/*",
+        "X-APP-ID": applicationId,
+        "x-api-key": apiKey,
+      },
+    );
+
+    print("Fetch assets response: ${response.statusCode} - ${response.body}");
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return List<Map<String, dynamic>>.from(data['data']);
+    } else {
+      print("Failed to fetch assets: ${response.statusCode} - ${response.body}");
+      return null;
+    }
+  }
+
+  static Future<bool> equipAsset(String avatarId, String assetId) async {
+    final url = Uri.parse("$baseUrl/v1/avatars/$avatarId/equip");
+    final body = jsonEncode({
+      "data": {
+        "assetId": assetId,
+      }
+    });
+
+    print("Equipping asset with URL: $url");
+    print("Request body: $body");
+
+    final response = await http.put(
+      url,
+      headers: {
+        "x-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: body,
+    );
+
+    print("Equip asset response: ${response.statusCode} - ${response.body}");
+
+    if (response.statusCode == 200) {
+      return true;
+    } else {
+      print("Failed to equip asset: ${response.statusCode} - ${response.body}");
+      return false;
+    }
+  }
+
+  static Future<String?> downloadAvatarGlb(String avatarId) async {
+    final url = Uri.parse("https://api.readyplayer.me/v2/avatars/$avatarId.glb");
+    print("Downloading avatar from URL: $url");
+
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      if (isMobile) {
+        final directoryPath = await getApplicationDocumentsDirectoryPath();
+        final filePath = '$directoryPath/$avatarId.glb';
+        final file = File(filePath);
+        await file.writeAsBytes(response.bodyBytes);
+        return file.path;
+      } else {
+        // For web, return the URL directly
+        return url.toString();
+      }
+    } else {
+      print("Failed to download avatar: ${response.statusCode} - ${response.body}");
+      return null;
+    }
+  }
 }
