@@ -1,0 +1,1 @@
+/home/kirtan/3d-Avatar-App/android/app/build/intermediates/cxx/Debug/575z4i5f/obj/x86

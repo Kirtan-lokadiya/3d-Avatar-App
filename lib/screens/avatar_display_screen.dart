@@ -97,20 +97,52 @@ class _AvatarDisplayScreenState extends State<AvatarDisplayScreen> {
               ? const CircularProgressIndicator()
               : _assets == null
                   ? const Text('Failed to load assets')
-                  : Expanded(
-                      child: ListView.builder(
-                        itemCount: _assets!.length,
-                        itemBuilder: (context, index) {
-                          final asset = _assets![index];
-                          return ListTile(
-                            leading: asset['iconUrl'] != null
-                                ? Image.network(asset['iconUrl'])
-                                : const Icon(Icons.image_not_supported),
-                            onTap: () async {
-                              await _equipAsset(asset['id']);
-                            },
-                          );
-                        },
+                  : Container(
+                      height: 120, // Fixed height for the assets row
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _assets!.map((asset) {
+                            return Container(
+                              width: 100, // Fixed width for each asset
+                              margin: const EdgeInsets.symmetric(horizontal: 8.0),
+                              child: GestureDetector(
+                                onTap: () async {
+                                  await _equipAsset(asset['id']);
+                                },
+                                child: Card(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      asset['iconUrl'] != null
+                                          ? Image.network(
+                                              asset['iconUrl'],
+                                              height: 80,
+                                              width: 80,
+                                              fit: BoxFit.cover,
+                                            )
+                                          : const Icon(
+                                              Icons.image_not_supported,
+                                              size: 80,
+                                            ),
+                                      if (asset['name'] != null)
+                                        Padding(
+                                          padding: const EdgeInsets.all(4.0),
+                                          child: Text(
+                                            asset['name'],
+                                            style: const TextStyle(fontSize: 12),
+                                            textAlign: TextAlign.center,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
                     ),
         ],

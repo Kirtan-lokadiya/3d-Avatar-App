@@ -1,0 +1,20 @@
+{
+  "buildFiles": [
+    "/home/kirtan/snap/flutter/common/flutter/packages/flutter_tools/gradle/src/main/groovy/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/usr/lib/android-sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/home/kirtan/3d-Avatar-App/android/app/.cxx/Debug/575z4i5f/x86_64",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/usr/lib/android-sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/home/kirtan/3d-Avatar-App/android/app/.cxx/Debug/575z4i5f/x86_64",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {}
+}
