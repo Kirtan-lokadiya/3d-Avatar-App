@@ -256,4 +256,78 @@ class ApiService {
       return null;
     }
   }
+
+  static Future<String?> generateAvatar(String base64Image, String gender, String userId) async {
+    try {
+      // First, create a photo upload session
+      final sessionUrl = Uri.parse("$baseUrl/v2/photos/upload-session");
+      final sessionResponse = await http.post(
+        sessionUrl,
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "data": {
+            "partner": "3d-avatar-7jesrz",
+            "userId": userId,
+          }
+        }),
+      );
+
+      if (sessionResponse.statusCode != 201) {
+        throw Exception('Failed to create upload session: ${sessionResponse.statusCode}');
+      }
+
+      final sessionData = jsonDecode(sessionResponse.body);
+      final String uploadUrl = sessionData['data']['uploadUrl'];
+      final String photoId = sessionData['data']['id'];
+
+      // Upload the photo
+      final uploadResponse = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {
+          "Content-Type": "image/jpeg",
+        },
+        body: base64Decode(base64Image),
+      );
+
+      if (uploadResponse.statusCode != 200) {
+        throw Exception('Failed to upload photo: ${uploadResponse.statusCode}');
+      }
+
+      // Create avatar from the uploaded photo
+      final createUrl = Uri.parse("$baseUrl/v2/avatars");
+      final createResponse = await http.post(
+        createUrl,
+        headers: {
+          "x-api-key": apiKey,
+          "Content-Type": "application/json",
+        },
+        body: jsonEncode({
+          "data": {
+            "partner": "3d-avatar-7jesrz",
+            "userId": userId,
+            "photoId": photoId,
+            "gender": gender,
+            "bodyType": "fullbody",
+            "renderOptions": {
+              "background": "transparent",
+              "pose": "A",
+            }
+          }
+        }),
+      );
+
+      if (createResponse.statusCode != 201) {
+        throw Exception('Failed to create avatar: ${createResponse.statusCode}');
+      }
+
+      final avatarData = jsonDecode(createResponse.body);
+      return avatarData['data']['id'];
+    } catch (e) {
+      print('Error generating avatar: $e');
+      return null;
+    }
+  }
 }

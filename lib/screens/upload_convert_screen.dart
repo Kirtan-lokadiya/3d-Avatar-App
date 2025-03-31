@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../services/api_service.dart';
 import 'avatar_display_screen.dart';
+import 'web_camera_screen.dart';
 
 class UploadConvertScreen extends StatefulWidget {
   final bool isTemplate;
@@ -126,6 +128,111 @@ class _UploadConvertScreenState extends State<UploadConvertScreen> {
     return base64Encode(bytes);
   }
 
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      if (source == ImageSource.camera) {
+        if (kIsWeb) {
+          // For web, use the new camera screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const WebCameraScreen(),
+            ),
+          );
+          return;
+        } else {
+          // For mobile, request camera permission
+          final status = await Permission.camera.request();
+          if (status.isDenied) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Camera permission is required')),
+              );
+            }
+            return;
+          }
+        }
+      }
+
+      final XFile? pickedFile = await _picker.pickImage(
+        source: source,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 85,
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = pickedFile;
+        });
+        
+        // Automatically proceed with avatar generation
+        final gender = await _selectGender(context);
+        if (gender != null) {
+          await _generateAvatar(gender);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking image: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _generateAvatar(String gender) async {
+    if (_imageFile == null) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final base64Image = await _getBase64Image();
+      if (base64Image == null) {
+        throw Exception('Failed to convert image to base64');
+      }
+
+      final userId = await ApiService.getFromCache('userId');
+      if (userId == null) {
+        throw Exception('User ID not found');
+      }
+
+      // Call your Ready Player Me API service here
+      final avatarId = await ApiService.generateAvatar(base64Image, gender, userId);
+      if (avatarId != null) {
+        final saved = await ApiService.saveAvatar(avatarId);
+        if (saved) {
+          final filePathOrUrl = await ApiService.downloadAvatarGlb(avatarId);
+          if (filePathOrUrl != null && mounted) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AvatarDisplayScreen(
+                  avatarGlbUrl: filePathOrUrl,
+                  avatarId: avatarId,
+                  userId: userId,
+                ),
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating avatar: ${e.toString()}')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -184,12 +291,13 @@ class _UploadConvertScreenState extends State<UploadConvertScreen> {
   Widget _buildUploadSection() {
     return Center(
       child: SingleChildScrollView(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _imageFile == null
-                ? const Text('No image selected.')
-                : kIsWeb
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (_imageFile != null) ...[
+                kIsWeb
                     ? Image.network(_imageFile!.path, height: 200)
                     : FutureBuilder<Uint8List>(
                         future: _imageFile!.readAsBytes(),
@@ -198,73 +306,41 @@ class _UploadConvertScreenState extends State<UploadConvertScreen> {
                             return Image.memory(snapshot.data!, height: 200);
                           } else if (snapshot.hasError) {
                             return const Text('Error loading image');
-                          } else {
-                            return const CircularProgressIndicator();
                           }
+                          return const CircularProgressIndicator();
                         },
                       ),
-            ElevatedButton(
-              onPressed: () async {
-                print('Select Image button pressed');
-                final pickedFile = await _picker.pickImage(source: ImageSource.gallery);
-                if (pickedFile != null) {
-                  setState(() {
-                    _imageFile = pickedFile;
-                  });
-                  print('Image selected: ${pickedFile.path}');
-                } else {
-                  print('No image selected');
-                }
-              },
-              child: const Text('Select Image'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                print('Upload and Generate Avatar button pressed');
-                final gender = await _selectGender(context);
-                print('Gender selected: $gender');
-                if (gender != null) {
-                  final base64Image = await _getBase64Image();
-                  print('Image converted to base64');
-                  if (base64Image != null) {
-                    final userId = await ApiService.getFromCache('userId');
-                    print('User ID fetched: $userId');
-                    if (userId != null) {
-                      final avatarId = await ApiService.createAvatarWithImage(userId, base64Image, gender);
-                      print('Avatar created with ID: $avatarId');
-                      if (avatarId != null) {
-                        final saved = await ApiService.saveAvatar(avatarId);
-                        if (saved) {
-                          final filePathOrUrl = await ApiService.downloadAvatarGlb(avatarId);
-                          if (filePathOrUrl != null) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => AvatarDisplayScreen(
-                                  avatarGlbUrl: filePathOrUrl,
-                                  avatarId: avatarId,
-                                  userId: userId,
-                                ),
-                              ),
-                            );
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Failed to download avatar')),
-                            );
-                          }
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Failed to save avatar')),
-                          );
-                        }
-                      }
+                const SizedBox(height: 20),
+              ],
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.gallery),
+                    icon: const Icon(Icons.photo_library),
+                    label: const Text('Gallery'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () => _pickImage(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt),
+                    label: const Text('Camera'),
+                  ),
+                ],
+              ),
+              if (_imageFile != null) ...[
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () async {
+                    final gender = await _selectGender(context);
+                    if (gender != null) {
+                      await _generateAvatar(gender);
                     }
-                  }
-                }
-              },
-              child: const Text('Upload and Generate Avatar'),
-            ),
-          ],
+                  },
+                  child: const Text('Generate Avatar'),
+                ),
+              ],
+            ],
+          ),
         ),
       ),
     );
